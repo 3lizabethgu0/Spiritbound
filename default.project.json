@@ -1,0 +1,25 @@
+{
+  "name": "Spiritbound",
+  "tree": {
+    "$className": "DataModel",
+
+    "ReplicatedStorage": {
+      "Shared": { "$path": "src/Shared" },
+      "Remotes": { "$className": "Folder" }
+    },
+
+    "ServerScriptService": {
+      "Server": { "$path": "src/Server" }
+    },
+
+    "ServerStorage": {
+      "Assets": { "$className": "Folder" }
+    },
+
+    "StarterPlayer": {
+      "StarterPlayerScripts": {
+        "Client": { "$path": "src/Client" }
+      }
+    }
+  }
+}

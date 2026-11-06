@@ -1,0 +1,14 @@
+# Roblox place/model binaries live in Studio, not in Git
+*.rbxl
+*.rbxlx
+*.rbxm
+*.rbxmx
+*.rbxl.lock
+
+# Rojo
+sourcemap.json
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
