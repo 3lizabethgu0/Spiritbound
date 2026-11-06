@@ -20,6 +20,11 @@ Config.RUN_RESTART_SECONDS = 10            -- OPEN     pause after the seal crac
 -- Testing only. 1 = real time. 10 = nights are 24 s, dawn 3 s. Keep at 1 when you commit.
 Config.DEBUG_TIME_SCALE = 1
 
+-- Every real-time wait in the game goes through this, so one number speeds up everything.
+function Config.scaled(seconds: number): number
+	return seconds / math.max(Config.DEBUG_TIME_SCALE, 0.01)
+end
+
 ----------------------------------------------------------------
 -- Lighting (grey-box feel, art pass later)
 ----------------------------------------------------------------
@@ -31,7 +36,9 @@ Config.CLOCK_DAWN = 7                      -- OPEN     where the sun ends up by 
 ----------------------------------------------------------------
 Config.SEAL_MAX_STARS = 5                  -- OPEN     star count not set in the doc
 Config.SEAL_START_STARS = 5                -- OPEN
-Config.SEAL_DRAIN_PER_NIGHT = 1            -- OPEN     stars lost per night if nothing is done
+Config.SEAL_DRAIN_PER_NIGHT = 1            -- OPEN     stars lost after a bad night
+Config.SEAL_HOLD_RATIO = 0.6               -- OPEN     serve at least this share of guests and the seal holds
+Config.SEAL_PERFECT_NIGHT_BONUS = 1        -- OPEN     serve every guest and the seal heals this many stars
 Config.SEAL_CRACK_THRESHOLD = 0            -- DECIDED  run ends when stars reach this
 
 ----------------------------------------------------------------
@@ -65,7 +72,14 @@ Config.DEAL_REWARD_PAYOUT_DAWNS = 3        -- PROPOSED pay deal rewards over sev
 ----------------------------------------------------------------
 -- Interaction
 ----------------------------------------------------------------
-Config.STATION_HOLD_SECONDS = 1.0          -- PROPOSED "Hold E" ProximityPrompt at every station
+Config.STATION_SERVICE_SECONDS = 3         -- OPEN     how long "Hold E" takes to serve; a station's ServiceSeconds attribute overrides
+
+----------------------------------------------------------------
+-- Guests
+----------------------------------------------------------------
+Config.GUEST_PATIENCE_SECONDS = 45         -- OPEN     from arrival until the guest storms off
+Config.GUEST_WALK_SPEED = 12               -- OPEN     studs per second (player default is 16)
+Config.GUEST_ARRIVAL_WINDOW = 0.7           -- OPEN     guests arrive spread over this share of the night
 Config.CARRY_SLOTS_DEFAULT = 1             -- PROPOSED one item at a time
 Config.CARRY_SLOTS_RUNNER = 2              -- PROPOSED Runner class carries two
 

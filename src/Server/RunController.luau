@@ -12,6 +12,8 @@ local TweenService = game:GetService("TweenService")
 
 local Config = require(ReplicatedStorage.Shared.Config)
 local Types = require(ReplicatedStorage.Shared.Types)
+local Economy = require(script.Parent.Economy)
+local GuestManager = require(script.Parent.GuestManager)
 local Seal = require(script.Parent.Seal)
 
 type RunState = Types.RunState
@@ -28,15 +30,13 @@ local state: RunState = {
 	maxStars = Config.SEAL_MAX_STARS,
 	phaseStartedAt = 0,
 	phaseEndsAt = 0,
+	guestsServed = 0,
+	guestsTotal = 0,
 }
 
 -- Bumped every time a run starts so an old loop notices it has been replaced.
 local runId = 0
 local clockTween: Tween? = nil
-
-local function scaled(seconds: number): number
-	return seconds / math.max(Config.DEBUG_TIME_SCALE, 0.01)
-end
 
 local function broadcast()
 	runStateRemote:FireAllClients(state)
@@ -64,6 +64,25 @@ local function tweenClock(target: number, duration: number)
 	clockTween:Play()
 end
 
+-- The seal rule (every number is OPEN in the design doc):
+--   nobody came      -> holds
+--   everyone served  -> heals SEAL_PERFECT_NIGHT_BONUS
+--   enough served    -> holds
+--   otherwise        -> drains SEAL_DRAIN_PER_NIGHT
+local function applyNightResult(served: number, total: number): string
+	if total == 0 then
+		return "quiet"
+	elseif served >= total then
+		Seal.add(Config.SEAL_PERFECT_NIGHT_BONUS)
+		return "perfect"
+	elseif served / total >= Config.SEAL_HOLD_RATIO then
+		return "held"
+	else
+		Seal.add(-Config.SEAL_DRAIN_PER_NIGHT)
+		return "bad"
+	end
+end
+
 local function runLoop(id: number)
 	state.night = 0
 	Seal.reset()
@@ -71,19 +90,26 @@ local function runLoop(id: number)
 	while id == runId do
 		-- Night
 		state.night += 1
-		tweenClock(Config.CLOCK_NIGHT, scaled(2))
-		setPhase("Night", scaled(Config.NIGHT_LENGTH_SECONDS))
-		task.wait(scaled(Config.NIGHT_LENGTH_SECONDS))
+		state.guestsServed, state.guestsTotal = 0, 0
+		local nightLength = Config.scaled(Config.NIGHT_LENGTH_SECONDS)
+		tweenClock(Config.CLOCK_NIGHT, Config.scaled(2))
+		setPhase("Night", nightLength)
+		GuestManager.startNight(nightLength, #Players:GetPlayers())
+		task.wait(nightLength)
 		if id ~= runId then
 			return
 		end
 
-		-- Night over: the seal weakens unless something stopped it (nothing does yet)
-		Seal.add(-Config.SEAL_DRAIN_PER_NIGHT)
+		-- Night over: tally the guests and judge the seal
+		local served, total = GuestManager.endNight()
+		local verdict = applyNightResult(served, total)
+		print(("[Run] night %d: %d/%d guests served, %s night, stars now %d"):format(state.night, served, total, verdict, Seal.Stars))
 
 		if Seal.isCracked() then
-			setPhase("Ended", scaled(Config.RUN_RESTART_SECONDS))
-			task.wait(scaled(Config.RUN_RESTART_SECONDS))
+			Economy.resetRun()
+			local pause = Config.scaled(Config.RUN_RESTART_SECONDS)
+			setPhase("Ended", pause)
+			task.wait(pause)
 			if id ~= runId then
 				return
 			end
@@ -91,9 +117,10 @@ local function runLoop(id: number)
 			Seal.reset()
 		else
 			-- Dawn
-			tweenClock(Config.CLOCK_DAWN, scaled(Config.DAWN_LENGTH_SECONDS))
-			setPhase("Dawn", scaled(Config.DAWN_LENGTH_SECONDS))
-			task.wait(scaled(Config.DAWN_LENGTH_SECONDS))
+			local dawnLength = Config.scaled(Config.DAWN_LENGTH_SECONDS)
+			tweenClock(Config.CLOCK_DAWN, dawnLength)
+			setPhase("Dawn", dawnLength)
+			task.wait(dawnLength)
 		end
 	end
 end
@@ -111,9 +138,15 @@ function RunController.stop()
 	runId += 1
 end
 
--- Keep the broadcast state in sync with the seal between phase changes
+-- Keep the broadcast state in sync between phase changes
 Seal.Changed:Connect(function(stars)
 	state.stars = stars
+	broadcast()
+end)
+
+GuestManager.Changed:Connect(function(served, total)
+	state.guestsServed = served
+	state.guestsTotal = total
 	broadcast()
 end)
 

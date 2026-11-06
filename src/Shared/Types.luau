@@ -13,6 +13,8 @@ export type RunState = {
 	maxStars: number,
 	phaseStartedAt: number,
 	phaseEndsAt: number,
+	guestsServed: number, -- this night so far
+	guestsTotal: number,  -- guests that have arrived this night
 }
 
 return nil
