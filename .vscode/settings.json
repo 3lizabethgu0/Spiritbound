@@ -1,0 +1,8 @@
+{
+  "files.eol": "\n",
+  "editor.insertSpaces": false,
+  "editor.tabSize": 4,
+  "[luau]": { "editor.defaultFormatter": "JohnnyMorganz.stylua" },
+  "luau-lsp.sourcemap.enabled": true,
+  "luau-lsp.sourcemap.rojoProjectFile": "default.project.json"
+}
