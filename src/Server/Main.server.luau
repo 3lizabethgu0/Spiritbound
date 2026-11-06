@@ -23,10 +23,16 @@ ensureRemote("RunState", "RemoteEvent") -- server -> client: RunState snapshots
 
 -- Boot order matters: placeholders create tagged parts, the guest system
 -- registers them, then the run loop starts using them.
+local Collisions = require(script.Parent.Collisions)
+Collisions.init()
+
 local Placeholders = require(script.Parent.Placeholders)
 Placeholders.ensure()
 
 require(script.Parent.Economy) -- sets up leaderstats for every player
+
+local Doors = require(script.Parent.Doors)
+Doors.init()
 
 local GuestManager = require(script.Parent.GuestManager)
 GuestManager.init()

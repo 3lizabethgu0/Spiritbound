@@ -1,14 +1,16 @@
 --!strict
 -- Grey-box stand-ins so the game is playable before the real models exist.
 -- Runs at server start and only builds what the map does not already provide:
---   no part tagged "Station"     -> two placeholder tubs on the tatami
+--   no part tagged "Door"        -> a door trigger in the exterior doorway, a plain
+--                                   interior room far from the map, and a door back out
+--   no part tagged "Station"     -> two placeholder tubs (inside the room if we built one)
 --   no part tagged "GuestSpawn"  -> a pad at the foot of the bridge
 --   no part tagged "GuestQueue"  -> a pad just outside the front door
--- Tag the real tub / gate parts in Studio and the matching placeholder stops appearing.
+-- Tag the real parts in Studio and the matching placeholder stops appearing.
 -- Everything goes in Workspace.Placeholders and exists only while the game runs.
 --
--- Positions are measured from the map at runtime (the Tatami floor, the door
--- Curtains, the bridge) so the map can be moved or rebuilt without touching code.
+-- Exterior positions are measured from the map at runtime (the Tatami floor,
+-- the door Curtains, the bridge) so the map can be moved without touching code.
 
 local CollectionService = game:GetService("CollectionService")
 
@@ -22,6 +24,16 @@ type Layout = {
 	tatamiCenter: Vector3,
 	bridgeFoot: Vector3?, -- far end of the bridge, if there is one
 }
+
+-- Where the placeholder interior goes: far enough that it is never seen from the map.
+local ROOM_ORIGIN = Vector3.new(0, 60, 2500)
+local ROOM_SIZE = Vector3.new(60, 14, 40)
+
+local COLOR_TUB = Color3.fromRGB(70, 150, 160)
+local COLOR_SPAWN = Color3.fromRGB(120, 220, 140)
+local COLOR_QUEUE = Color3.fromRGB(255, 196, 92)
+local COLOR_DOOR = Color3.fromRGB(170, 110, 255)
+local COLOR_TARGET = Color3.fromRGB(110, 170, 255)
 
 local function findPart(name: string): BasePart?
 	for _, d in workspace:GetDescendants() do
@@ -73,40 +85,90 @@ local function measureMap(): Layout?
 	return { floorY = floorY, door = door, outward = outward, lateral = lateral, tatamiCenter = center, bridgeFoot = bridgeFoot }
 end
 
-local function pad(folder: Folder, name: string, position: Vector3, tag: string, color: Color3)
+----------------------------------------------------------------
+-- Builders
+----------------------------------------------------------------
+
+local function block(folder: Instance, name: string, cframe: CFrame, size: Vector3, color: Color3): Part
 	local part = Instance.new("Part")
 	part.Name = name
-	part.Size = Vector3.new(6, 1, 6)
-	part.Position = position
+	part.Size = size
+	part.CFrame = cframe
 	part.Anchored = true
-	part.CanCollide = false
 	part.Color = color
+	part.Material = Enum.Material.SmoothPlastic
+	part.Parent = folder
+	return part
+end
+
+-- Flat marker pad; front (LookVector) points along `facing`
+local function pad(folder: Instance, name: string, position: Vector3, facing: Vector3, tag: string, color: Color3): Part
+	local part = block(folder, name, CFrame.lookAt(position, position + facing), Vector3.new(6, 1, 6), color)
+	part.CanCollide = false
 	part.Material = Enum.Material.Neon
 	part.Transparency = 0.6
 	CollectionService:AddTag(part, tag)
-	part.Parent = folder
+	return part
 end
 
-local function tub(folder: Folder, name: string, position: Vector3, facing: Vector3)
-	local part = Instance.new("Part")
-	part.Name = name
-	part.Size = Vector3.new(6, 3, 4)
-	-- lookAt sets the front (LookVector) toward `facing`; guests stand on that side
-	part.CFrame = CFrame.lookAt(position, position + facing)
-	part.Anchored = true
-	part.Color = Color3.fromRGB(70, 150, 160)
-	part.Material = Enum.Material.SmoothPlastic
+-- Upright trigger volume filling a doorway; non-colliding so anyone can walk into it
+local function doorTrigger(folder: Instance, name: string, position: Vector3, facing: Vector3, targetId: string): Part
+	local part = block(folder, name, CFrame.lookAt(position, position + facing), Vector3.new(8, 8, 2), COLOR_DOOR)
+	part.CanCollide = false
+	part.Material = Enum.Material.Neon
+	part.Transparency = 0.7
+	part:SetAttribute("Target", targetId)
+	CollectionService:AddTag(part, "Door")
+	return part
+end
+
+local function tub(folder: Instance, name: string, position: Vector3, facing: Vector3)
+	local part = block(folder, name, CFrame.lookAt(position, position + facing), Vector3.new(6, 3, 4), COLOR_TUB)
 	part:SetAttribute("ServiceType", "Bath")
 	CollectionService:AddTag(part, "Station")
-	part.Parent = folder
 end
 
+-- A closed grey room with lights. Returns the floor-level point just inside its door
+-- and the direction pointing into the room.
+local function room(folder: Instance): (Vector3, Vector3)
+	local o = ROOM_ORIGIN
+	local w, h, d = ROOM_SIZE.X, ROOM_SIZE.Y, ROOM_SIZE.Z
+	local wallColor = Color3.fromRGB(90, 88, 96)
+	block(folder, "RoomFloor", CFrame.new(o), Vector3.new(w, 1, d), Color3.fromRGB(120, 118, 110))
+	block(folder, "RoomCeiling", CFrame.new(o + Vector3.new(0, h, 0)), Vector3.new(w, 1, d), wallColor)
+	block(folder, "RoomWallBack", CFrame.new(o + Vector3.new(0, h / 2, -d / 2)), Vector3.new(w, h, 1), wallColor)
+	block(folder, "RoomWallLeft", CFrame.new(o + Vector3.new(-w / 2, h / 2, 0)), Vector3.new(1, h, d), wallColor)
+	block(folder, "RoomWallRight", CFrame.new(o + Vector3.new(w / 2, h / 2, 0)), Vector3.new(1, h, d), wallColor)
+	-- front wall with a doorway gap in the middle
+	local gap = 8
+	local side = (w - gap) / 2
+	block(folder, "RoomWallFrontL", CFrame.new(o + Vector3.new(-(gap / 2 + side / 2), h / 2, d / 2)), Vector3.new(side, h, 1), wallColor)
+	block(folder, "RoomWallFrontR", CFrame.new(o + Vector3.new(gap / 2 + side / 2, h / 2, d / 2)), Vector3.new(side, h, 1), wallColor)
+	block(folder, "RoomWallFrontTop", CFrame.new(o + Vector3.new(0, h - 2, d / 2)), Vector3.new(gap, 4, 1), wallColor)
+	for _, offset in { Vector3.new(-18, h - 2, -10), Vector3.new(18, h - 2, -10), Vector3.new(-18, h - 2, 10), Vector3.new(18, h - 2, 10) } do
+		local lamp = block(folder, "RoomLamp", CFrame.new(o + offset), Vector3.new(2, 1, 2), Color3.fromRGB(255, 230, 180))
+		lamp.Material = Enum.Material.Neon
+		local light = Instance.new("PointLight")
+		light.Range = 40
+		light.Brightness = 1.5
+		light.Parent = lamp
+	end
+	local floorTop = o.Y + 0.5
+	local doorway = Vector3.new(o.X, floorTop, o.Z + d / 2)
+	return doorway, Vector3.new(0, 0, -1)
+end
+
+----------------------------------------------------------------
+-- Entry point
+----------------------------------------------------------------
+
 function Placeholders.ensure()
+	local needDoors = #CollectionService:GetTagged("Door") == 0
 	local needStations = #CollectionService:GetTagged("Station") == 0
 	local needSpawn = #CollectionService:GetTagged("GuestSpawn") == 0
 	local needQueue = #CollectionService:GetTagged("GuestQueue") == 0
-	if not (needStations or needSpawn or needQueue) then
-		print("[Placeholders] map provides stations, spawn and queue; nothing to build")
+	if not (needDoors or needStations or needSpawn or needQueue) then
+		print("[Placeholders] map provides doors, stations, spawn and queue; nothing to build")
 		return
 	end
 
@@ -128,20 +190,38 @@ function Placeholders.ensure()
 	folder.Name = "Placeholders"
 	folder.Parent = workspace
 
+	-- Where tubs go: the placeholder room if we build one, else the tatami
+	local tubRow = L.tatamiCenter - L.outward * 8 + Vector3.new(0, 1.5, 0)
+	local tubLateral = L.lateral
+	local tubFacing = L.outward
+
+	if needDoors then
+		local roomDoorway, intoRoom = room(folder)
+		local outOfRoom = -intoRoom
+		-- exterior doorway -> inside; land 6 studs into the room, facing in
+		doorTrigger(folder, "PlaceholderDoorIn", L.door + Vector3.new(0, 4, 0), L.outward, "Inside")
+		pad(folder, "PlaceholderTargetInside", roomDoorway + intoRoom * 6, intoRoom, "DoorTarget", COLOR_TARGET):SetAttribute("Id", "Inside")
+		-- room doorway -> outside; land 6 studs out the front door, facing away from the building
+		doorTrigger(folder, "PlaceholderDoorOut", roomDoorway + Vector3.new(0, 4, 0), outOfRoom, "Outside")
+		-- offset sideways so exiting characters never land on guests waiting at the queue pad
+		pad(folder, "PlaceholderTargetOutside", L.door + L.outward * 6 + L.lateral * 4, L.outward, "DoorTarget", COLOR_TARGET):SetAttribute("Id", "Outside")
+
+		tubRow = ROOM_ORIGIN + Vector3.new(0, 0.5 + 1.5, -6)
+		tubLateral = Vector3.new(1, 0, 0)
+		tubFacing = Vector3.new(0, 0, 1) -- face the room's door
+	end
 	if needStations then
-		local inward = -L.outward
-		local row = L.tatamiCenter + inward * 8 + Vector3.new(0, 1.5, 0)
-		tub(folder, "PlaceholderTub1", row - L.lateral * 14, L.outward)
-		tub(folder, "PlaceholderTub2", row + L.lateral * 14, L.outward)
+		tub(folder, "PlaceholderTub1", tubRow - tubLateral * 14, tubFacing)
+		tub(folder, "PlaceholderTub2", tubRow + tubLateral * 14, tubFacing)
 	end
 	if needQueue then
-		pad(folder, "PlaceholderGuestQueue", L.door + L.outward * 5 + Vector3.new(0, 0.5, 0), "GuestQueue", Color3.fromRGB(255, 196, 92))
+		pad(folder, "PlaceholderGuestQueue", L.door + L.outward * 5 - L.lateral * 3 + Vector3.new(0, 0.5, 0), L.outward, "GuestQueue", COLOR_QUEUE)
 	end
 	if needSpawn then
 		local spawnAt = L.bridgeFoot or (L.door + L.outward * 45)
-		pad(folder, "PlaceholderGuestSpawn", Vector3.new(spawnAt.X, 0.5, spawnAt.Z), "GuestSpawn", Color3.fromRGB(120, 220, 140))
+		pad(folder, "PlaceholderGuestSpawn", Vector3.new(spawnAt.X, 0.5, spawnAt.Z), L.outward, "GuestSpawn", COLOR_SPAWN)
 	end
-	print(("[Placeholders] built stand-ins: door at (%.0f, %.0f, %.0f), facing out along (%.1f, %.1f)"):format(L.door.X, L.door.Y, L.door.Z, L.outward.X, L.outward.Z))
+	print(("[Placeholders] built stand-ins: door at (%.0f, %.0f, %.0f), room=%s"):format(L.door.X, L.door.Y, L.door.Z, tostring(needDoors)))
 end
 
 return Placeholders

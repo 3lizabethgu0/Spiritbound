@@ -10,6 +10,8 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Config = require(ReplicatedStorage.Shared.Config)
+local Collisions = require(script.Parent.Collisions)
+local Doors = require(script.Parent.Doors)
 local Economy = require(script.Parent.Economy)
 local Stations = require(script.Parent.Stations)
 
@@ -47,6 +49,7 @@ local function buildRig(name: string): Model
 	humanoid.WalkSpeed = Config.GUEST_WALK_SPEED
 	humanoid.NameDisplayDistance = 0 -- we draw our own tag
 	humanoid.HealthDisplayDistance = 0
+	Collisions.assign(model, Collisions.GUEST)
 	return model
 end
 
@@ -121,15 +124,32 @@ function Guest._walkTo(self: any, target: Vector3, timeout: number, abortIf: (()
 	local root: BasePart = self.root
 
 	local path = PathfindingService:CreatePath({ AgentRadius = 2, AgentHeight = 5, AgentCanJump = true })
-	local ok = pcall(function()
-		path:ComputeAsync(root.Position, target)
-	end)
+	local ok = false
+	for attempt = 1, 2 do
+		ok = pcall(function()
+			path:ComputeAsync(root.Position, target)
+		end)
+		if ok and path.Status == Enum.PathStatus.Success then
+			break
+		end
+		if attempt == 1 then
+			task.wait(0.5) -- the navmesh may still be settling (e.g. right after a teleport)
+		end
+	end
 	local waypoints: { PathWaypoint }
 	if ok and path.Status == Enum.PathStatus.Success then
 		waypoints = path:GetWaypoints()
 	else
 		-- No path (e.g. a wall with no door): walk straight and hope. Logged so the map can be fixed.
-		warn(("[Guest] %s found no path to %s, walking straight"):format(self.name, tostring(target)))
+		local nearestPlayer = math.huge
+		for _, player in Players:GetPlayers() do
+			local character = player.Character
+			if character then
+				nearestPlayer = math.min(nearestPlayer, (character:GetPivot().Position - root.Position).Magnitude)
+			end
+		end
+		warn(("[Guest] %s found no path to %s, walking straight (from %s, floor=%s, nearest player %.1f studs, status=%s)"):format(
+			self.name, tostring(target), tostring(root.Position), tostring(humanoid.FloorMaterial), nearestPlayer, tostring(path.Status)))
 		waypoints = {
 			PathWaypoint.new(root.Position, Enum.PathWaypointAction.Walk),
 			PathWaypoint.new(target, Enum.PathWaypointAction.Walk),
@@ -154,6 +174,39 @@ function Guest._walkTo(self: any, target: Vector3, timeout: number, abortIf: (()
 	return true
 end
 
+-- Walk into a door and go through it. Does nothing when `door` is nil, so a
+-- map without doors (the old "walk straight in" layout) still works.
+function Guest._useDoor(self: any, door: Doors.Door?)
+	if not door then
+		return
+	end
+	-- aim at the floor under the trigger: pathfinding needs a walkable target
+	local floorPoint = door.part.Position - Vector3.new(0, door.part.Size.Y / 2, 0)
+	self:_walkTo(floorPoint, Config.scaled(30), function()
+		-- only the arrival walk gives up when dawn comes; a leaving guest must still get out
+		return self.state == "Arriving" and self.dismissed
+	end)
+	if self.alive then
+		local went = Doors.use(door, self.model)
+		if not went then
+			task.wait(2.2) -- door cooldown; try once more
+			went = Doors.use(door, self.model)
+		end
+		if not went then
+			warn(("[Guest] %s could not use %s"):format(self.name, door.part.Name))
+			return
+		end
+		-- Wait until we are standing on the other side; a path computed mid-air fails.
+		local humanoid: Humanoid = self.humanoid
+		local landed = os.clock()
+		repeat
+			task.wait(0.1)
+		until humanoid.FloorMaterial ~= Enum.Material.Air or os.clock() - landed > 2
+		print(("[Guest] %s through door to %s, landed on %s after %.1fs at %s"):format(self.name, door.targetId, tostring(humanoid.FloorMaterial), os.clock() - landed, tostring(self.root.Position)))
+		task.wait(0.2)
+	end
+end
+
 function Guest._setPatience(self: any, fraction: number)
 	local f = math.clamp(fraction, 0, 1)
 	self.bar.Size = UDim2.new(f, 0, 1, 0)
@@ -167,6 +220,9 @@ function Guest._run(self: any)
 	end)
 	if not self.alive then
 		return
+	end
+	if not self.dismissed then
+		self:_useDoor(Doors.nearest(self.root.Position, 25)) -- the front door, if the interior is elsewhere
 	end
 
 	-- 2. Wait. Patience starts now and keeps ticking while walking to a station.
@@ -229,6 +285,8 @@ function Guest._run(self: any)
 		self.label.TextColor3 = COLOR_ANGRY
 		self.bar.Size = UDim2.new(0, 0, 1, 0)
 	end
+	-- Back out through whichever door leads toward the spawn point, if one does
+	self:_useDoor(Doors.towards(self.root.Position, self.spawnPoint, 400))
 	self:_walkTo(self.spawnPoint, Config.scaled(60))
 	self:destroy()
 end
