@@ -21,6 +21,8 @@ type Layout = {
 	door: Vector3, -- doorway at floor level
 	outward: Vector3, -- unit vector from inside the building out through the door
 	lateral: Vector3, -- unit vector across the doorway
+	doorWidth: number, -- opening measured from the curtains
+	doorHeight: number, -- floor to the top of the curtains
 	tatamiCenter: Vector3,
 	bridgeFoot: Vector3?, -- far end of the bridge, if there is one
 }
@@ -75,6 +77,18 @@ local function measureMap(): Layout?
 	outward = outward.Unit
 	local lateral = outward:Cross(Vector3.yAxis).Unit
 
+	-- Opening size: how far the curtains spread sideways, and how high they hang
+	local minAcross, maxAcross, top = math.huge, -math.huge, floorY
+	for _, c in curtains do
+		local across = (c.Position - door):Dot(lateral)
+		local halfWidth = math.max(c.Size.X, c.Size.Z) / 2
+		minAcross = math.min(minAcross, across - halfWidth)
+		maxAcross = math.max(maxAcross, across + halfWidth)
+		top = math.max(top, c.Position.Y + c.Size.Y / 2)
+	end
+	local doorWidth = math.max(4, maxAcross - minAcross)
+	local doorHeight = math.max(6, top - floorY)
+
 	local bridgeFoot: Vector3? = nil
 	local rampOut = findPart("BridgeRampOut")
 	if rampOut then
@@ -82,7 +96,16 @@ local function measureMap(): Layout?
 		bridgeFoot = Vector3.new(far.X, 0.5, far.Z)
 	end
 
-	return { floorY = floorY, door = door, outward = outward, lateral = lateral, tatamiCenter = center, bridgeFoot = bridgeFoot }
+	return {
+		floorY = floorY,
+		door = door,
+		outward = outward,
+		lateral = lateral,
+		doorWidth = doorWidth,
+		doorHeight = doorHeight,
+		tatamiCenter = center,
+		bridgeFoot = bridgeFoot,
+	}
 end
 
 ----------------------------------------------------------------
@@ -105,18 +128,18 @@ end
 local function pad(folder: Instance, name: string, position: Vector3, facing: Vector3, tag: string, color: Color3): Part
 	local part = block(folder, name, CFrame.lookAt(position, position + facing), Vector3.new(6, 1, 6), color)
 	part.CanCollide = false
-	part.Material = Enum.Material.Neon
-	part.Transparency = 0.6
+	part.Transparency = 1 -- invisible marker; only its position and tag matter
 	CollectionService:AddTag(part, tag)
 	return part
 end
 
 -- Upright trigger volume filling a doorway; non-colliding so anyone can walk into it
-local function doorTrigger(folder: Instance, name: string, position: Vector3, facing: Vector3, targetId: string): Part
-	local part = block(folder, name, CFrame.lookAt(position, position + facing), Vector3.new(8, 8, 2), COLOR_DOOR)
+local function doorTrigger(folder: Instance, name: string, floorPoint: Vector3, facing: Vector3, width: number, height: number, targetId: string): Part
+	local center = floorPoint + Vector3.new(0, height / 2, 0)
+	local part = block(folder, name, CFrame.lookAt(center, center + facing), Vector3.new(width, height, 0.5), COLOR_DOOR)
 	part.CanCollide = false
 	part.Material = Enum.Material.Neon
-	part.Transparency = 0.7
+	part.Transparency = 0.75
 	part:SetAttribute("Target", targetId)
 	CollectionService:AddTag(part, "Door")
 	return part
@@ -180,6 +203,8 @@ function Placeholders.ensure()
 			door = Vector3.new(0, 4, -70),
 			outward = Vector3.new(0, 0, 1),
 			lateral = Vector3.new(1, 0, 0),
+			doorWidth = 9,
+			doorHeight = 10,
 			tatamiCenter = Vector3.new(0, 4, -90),
 			bridgeFoot = Vector3.new(0, 0.5, -16),
 		}
@@ -199,10 +224,10 @@ function Placeholders.ensure()
 		local roomDoorway, intoRoom = room(folder)
 		local outOfRoom = -intoRoom
 		-- exterior doorway -> inside; land 6 studs into the room, facing in
-		doorTrigger(folder, "PlaceholderDoorIn", L.door + Vector3.new(0, 4, 0), L.outward, "Inside")
+		doorTrigger(folder, "PlaceholderDoorIn", L.door, L.outward, L.doorWidth, L.doorHeight, "Inside")
 		pad(folder, "PlaceholderTargetInside", roomDoorway + intoRoom * 6, intoRoom, "DoorTarget", COLOR_TARGET):SetAttribute("Id", "Inside")
 		-- room doorway -> outside; land 6 studs out the front door, facing away from the building
-		doorTrigger(folder, "PlaceholderDoorOut", roomDoorway + Vector3.new(0, 4, 0), outOfRoom, "Outside")
+		doorTrigger(folder, "PlaceholderDoorOut", roomDoorway, outOfRoom, 8, ROOM_SIZE.Y - 4, "Outside")
 		-- offset sideways so exiting characters never land on guests waiting at the queue pad
 		pad(folder, "PlaceholderTargetOutside", L.door + L.outward * 6 + L.lateral * 4, L.outward, "DoorTarget", COLOR_TARGET):SetAttribute("Id", "Outside")
 
