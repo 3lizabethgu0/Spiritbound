@@ -63,6 +63,7 @@ corner.CornerRadius = UDim.new(0, 10)
 corner.Parent = top
 local layout = Instance.new("UIListLayout")
 layout.FillDirection = Enum.FillDirection.Vertical
+layout.SortOrder = Enum.SortOrder.LayoutOrder -- default sorts by Name
 layout.HorizontalAlignment = Enum.HorizontalAlignment.Center
 layout.Padding = UDim.new(0, 2)
 layout.Parent = top
@@ -73,8 +74,91 @@ pad.Parent = top
 
 local nightLabel = label(top, "Night", 26, COLOR_TEXT)
 local timerLabel = label(top, "Timer", 22, COLOR_DIM)
-local starsLabel = label(top, "Stars", 28, COLOR_STAR)
-starsLabel.RichText = true
+
+-- Seal stars: one cell per star. Each cell has a grey star underneath and a
+-- gold star inside a clipping frame. Shrinking the clip's width cuts the gold
+-- star off at the fraction, so 4.75 shows four gold stars and three quarters of a fifth.
+local STAR_SIZE = 30
+local starsRow = Instance.new("Frame")
+starsRow.Name = "Stars"
+starsRow.BackgroundTransparency = 1
+starsRow.Size = UDim2.new(1, 0, 0, STAR_SIZE + 4)
+nextOrder += 1
+starsRow.LayoutOrder = nextOrder
+starsRow.Parent = top
+local starsLayout = Instance.new("UIListLayout")
+starsLayout.FillDirection = Enum.FillDirection.Horizontal
+starsLayout.SortOrder = Enum.SortOrder.LayoutOrder
+starsLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+starsLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+starsLayout.Padding = UDim.new(0, 2)
+starsLayout.Parent = starsRow
+
+local function starGlyph(parent: Instance, color: Color3): TextLabel
+	local glyph = Instance.new("TextLabel")
+	glyph.BackgroundTransparency = 1
+	glyph.Size = UDim2.new(0, STAR_SIZE, 0, STAR_SIZE)
+	glyph.Font = FONT
+	glyph.TextSize = STAR_SIZE
+	glyph.TextColor3 = color
+	glyph.TextStrokeTransparency = 0.6
+	glyph.Text = "★"
+	glyph.Parent = parent
+	return glyph
+end
+
+local starClips: { Frame } = {}
+local function buildStars(maxStars: number)
+	for _, child in starsRow:GetChildren() do
+		if child:IsA("Frame") then
+			child:Destroy()
+		end
+	end
+	table.clear(starClips)
+	for i = 1, maxStars do
+		local cell = Instance.new("Frame")
+		cell.Name = ("Star%d"):format(i)
+		cell.BackgroundTransparency = 1
+		cell.Size = UDim2.new(0, STAR_SIZE, 0, STAR_SIZE)
+		cell.LayoutOrder = i
+		cell.Parent = starsRow
+		starGlyph(cell, COLOR_STAR_LOST)
+		local clip = Instance.new("Frame")
+		clip.Name = "Clip"
+		clip.BackgroundTransparency = 1
+		clip.ClipsDescendants = true
+		clip.Size = UDim2.new(1, 0, 1, 0)
+		clip.Parent = cell
+		starGlyph(clip, COLOR_STAR) -- full width inside the clip, so the clip's edge cuts it
+		starClips[i] = clip
+	end
+	local value = Instance.new("TextLabel")
+	value.Name = "Value"
+	value.BackgroundTransparency = 1
+	value.Size = UDim2.new(0, 44, 0, STAR_SIZE)
+	value.LayoutOrder = maxStars + 1
+	value.Font = FONT
+	value.TextSize = 14
+	value.TextColor3 = COLOR_DIM
+	value.TextXAlignment = Enum.TextXAlignment.Left
+	value.Text = ""
+	value.Parent = starsRow
+end
+
+local function setStars(stars: number, maxStars: number)
+	if #starClips ~= maxStars then
+		buildStars(maxStars)
+	end
+	for i, clip in starClips do
+		local fill = math.clamp(stars - (i - 1), 0, 1)
+		clip.Size = UDim2.new(fill, 0, 1, 0)
+	end
+	local value = starsRow:FindFirstChild("Value") :: TextLabel?
+	if value then
+		value.Text = ("%.2f"):format(stars)
+	end
+end
+
 local guestsLabel = label(top, "Guests", 16, COLOR_DIM)
 
 -- Coins sit in their own corner so the top block stays about the night
@@ -106,25 +190,10 @@ local function formatTime(seconds: number): string
 	return ("%d:%02d"):format(s // 60, s % 60)
 end
 
-local function starsText(stars: number, maxStars: number): string
-	local full = math.floor(stars)
-	local fraction = stars - full
-	local text = ("<font color=\"#%s\">%s</font>"):format(COLOR_STAR:ToHex(), string.rep("★", full))
-	local lostCount = maxStars - full
-	if fraction > 0.01 then
-		-- the partial star fades toward the lost colour as it drains
-		local partial = COLOR_STAR_LOST:Lerp(COLOR_STAR, fraction)
-		text ..= ("<font color=\"#%s\">★</font>"):format(partial:ToHex())
-		lostCount -= 1
-	end
-	text ..= ("<font color=\"#%s\">%s</font>"):format(COLOR_STAR_LOST:ToHex(), string.rep("★", math.max(0, lostCount)))
-	text ..= (" <font size=\"14\" color=\"#%s\">%.2f</font>"):format(COLOR_DIM:ToHex(), stars)
-	return text
-end
 
 function HUD.setState(newState: RunState)
 	state = newState
-	starsLabel.Text = starsText(newState.stars, newState.maxStars)
+	setStars(newState.stars, newState.maxStars)
 
 	if newState.phase == "Night" then
 		nightLabel.Text = ("NIGHT %d"):format(newState.night)
