@@ -4,8 +4,13 @@
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
-local Config = require(ReplicatedStorage.Shared.Config)
+local HUD = require(script.Parent.HUD)
 
-print(("[Spiritbound] Client ready. Expecting %d-second nights."):format(Config.NIGHT_LENGTH_SECONDS))
+local remotes = ReplicatedStorage:WaitForChild("Remotes")
+local runStateRemote = remotes:WaitForChild("RunState") :: RemoteEvent
 
--- TODO HUD
+runStateRemote.OnClientEvent:Connect(function(state)
+	HUD.setState(state)
+end)
+
+print("[Spiritbound] Client ready.")

@@ -15,6 +15,16 @@ Config.NIGHT_LENGTH_SECONDS = 240          -- DECIDED  ~4 minutes per night
 Config.DAWN_LENGTH_SECONDS = 30            -- DECIDED  ~30 seconds of dawn
 Config.LEGENDARY_NIGHT = 100               -- DECIDED  the 100-night goal
 Config.TUTORIAL_NIGHT_ENABLED = true       -- PROPOSED "Night 0" teaches serving, seal, dawn
+Config.RUN_RESTART_SECONDS = 10            -- OPEN     pause after the seal cracks before a new run (until the lobby exists)
+
+-- Testing only. 1 = real time. 10 = nights are 24 s, dawn 3 s. Keep at 1 when you commit.
+Config.DEBUG_TIME_SCALE = 1
+
+----------------------------------------------------------------
+-- Lighting (grey-box feel, art pass later)
+----------------------------------------------------------------
+Config.CLOCK_NIGHT = 0                     -- OPEN     Lighting.ClockTime during a night (midnight)
+Config.CLOCK_DAWN = 7                      -- OPEN     where the sun ends up by the end of dawn
 
 ----------------------------------------------------------------
 -- Seal
