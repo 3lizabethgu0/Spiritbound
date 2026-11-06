@@ -36,9 +36,7 @@ Config.CLOCK_DAWN = 7                      -- OPEN     where the sun ends up by 
 ----------------------------------------------------------------
 Config.SEAL_MAX_STARS = 5                  -- OPEN     star count not set in the doc
 Config.SEAL_START_STARS = 5                -- OPEN
-Config.SEAL_DRAIN_PER_NIGHT = 1            -- OPEN     stars lost after a bad night
-Config.SEAL_HOLD_RATIO = 0.6               -- OPEN     serve at least this share of guests and the seal holds
-Config.SEAL_PERFECT_NIGHT_BONUS = 1        -- OPEN     serve every guest and the seal heals this many stars
+Config.SEAL_LOSS_PER_UNSERVED_GUEST = 0.25 -- DECIDED  serving never heals; each guest who leaves unserved costs this much (number is OPEN)
 Config.SEAL_CRACK_THRESHOLD = 0            -- DECIDED  run ends when stars reach this
 
 ----------------------------------------------------------------

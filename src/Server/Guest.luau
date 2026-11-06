@@ -17,6 +17,7 @@ export type GuestState = "Arriving" | "Waiting" | "Served" | "Angry" | "Gone"
 
 export type Callbacks = {
 	onServed: (guest: any, player: Player) -> (),
+	onAngry: (guest: any) -> (), -- left unserved: patience ran out or dawn came
 	onFinished: (guest: any) -> (),
 }
 
@@ -173,6 +174,7 @@ function Guest._run(self: any)
 	self.deadline = os.clock() + patience
 	if self.dismissed then
 		self.state = "Angry"
+		self.callbacks.onAngry(self)
 	else
 		self.state = "Waiting"
 	end
@@ -200,6 +202,8 @@ function Guest._run(self: any)
 		self:_setPatience(remaining / patience)
 		if (self.dismissed or remaining <= 0) and self.state == "Waiting" then
 			self.state = "Angry"
+			print(("[Guest] %s left unserved"):format(self.name))
+			self.callbacks.onAngry(self)
 		end
 		task.wait(0.25)
 	end

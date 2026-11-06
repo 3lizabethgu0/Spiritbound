@@ -14,6 +14,9 @@ local GuestManager = {}
 local changed = Instance.new("BindableEvent")
 GuestManager.Changed = changed.Event -- fires (served: number, total: number)
 
+local guestAngry = Instance.new("BindableEvent")
+GuestManager.GuestAngry = guestAngry.Event -- fires (guestName: string) when a guest leaves unserved
+
 local active: { [number]: any } = {}
 local nextId = 0
 local served = 0
@@ -52,6 +55,9 @@ function GuestManager.spawnGuest()
 		onServed = function()
 			served += 1
 			notify()
+		end,
+		onAngry = function(g)
+			guestAngry:Fire(g.name)
 		end,
 		onFinished = function()
 			active[id] = nil

@@ -48,7 +48,7 @@ local function setPhase(phase: RunPhase, duration: number)
 	state.stars = Seal.Stars
 	state.phaseStartedAt = now
 	state.phaseEndsAt = now + duration
-	print(("[Run] %s | night %d | stars %d/%d | %.0fs"):format(phase, state.night, state.stars, state.maxStars, duration))
+	print(("[Run] %s | night %d | stars %.2f/%d | %.0fs"):format(phase, state.night, state.stars, state.maxStars, duration))
 	broadcast()
 end
 
@@ -62,25 +62,6 @@ local function tweenClock(target: number, duration: number)
 		{ ClockTime = target }
 	)
 	clockTween:Play()
-end
-
--- The seal rule (every number is OPEN in the design doc):
---   nobody came      -> holds
---   everyone served  -> heals SEAL_PERFECT_NIGHT_BONUS
---   enough served    -> holds
---   otherwise        -> drains SEAL_DRAIN_PER_NIGHT
-local function applyNightResult(served: number, total: number): string
-	if total == 0 then
-		return "quiet"
-	elseif served >= total then
-		Seal.add(Config.SEAL_PERFECT_NIGHT_BONUS)
-		return "perfect"
-	elseif served / total >= Config.SEAL_HOLD_RATIO then
-		return "held"
-	else
-		Seal.add(-Config.SEAL_DRAIN_PER_NIGHT)
-		return "bad"
-	end
 end
 
 local function runLoop(id: number)
@@ -100,10 +81,9 @@ local function runLoop(id: number)
 			return
 		end
 
-		-- Night over: tally the guests and judge the seal
+		-- Night over: send remaining guests home (each unserved one has already cost the seal)
 		local served, total = GuestManager.endNight()
-		local verdict = applyNightResult(served, total)
-		print(("[Run] night %d: %d/%d guests served, %s night, stars now %d"):format(state.night, served, total, verdict, Seal.Stars))
+		print(("[Run] night %d over: %d of %d guests served, seal at %.2f"):format(state.night, served, total, Seal.Stars))
 
 		if Seal.isCracked() then
 			Economy.resetRun()
@@ -148,6 +128,13 @@ GuestManager.Changed:Connect(function(served, total)
 	state.guestsServed = served
 	state.guestsTotal = total
 	broadcast()
+end)
+
+-- The seal rule: serving is expected, not rewarded. Every guest who leaves
+-- unserved chips a fraction off the seal, right when it happens.
+GuestManager.GuestAngry:Connect(function(guestName)
+	Seal.add(-Config.SEAL_LOSS_PER_UNSERVED_GUEST)
+	print(("[Seal] %s left unserved: -%.2f, now %.2f"):format(guestName, Config.SEAL_LOSS_PER_UNSERVED_GUEST, Seal.Stars))
 end)
 
 -- Late joiners get the current state immediately

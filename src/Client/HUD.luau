@@ -107,9 +107,19 @@ local function formatTime(seconds: number): string
 end
 
 local function starsText(stars: number, maxStars: number): string
-	local lit = ("<font color=\"#%s\">%s</font>"):format(COLOR_STAR:ToHex(), string.rep("★", stars))
-	local lost = ("<font color=\"#%s\">%s</font>"):format(COLOR_STAR_LOST:ToHex(), string.rep("★", maxStars - stars))
-	return lit .. lost
+	local full = math.floor(stars)
+	local fraction = stars - full
+	local text = ("<font color=\"#%s\">%s</font>"):format(COLOR_STAR:ToHex(), string.rep("★", full))
+	local lostCount = maxStars - full
+	if fraction > 0.01 then
+		-- the partial star fades toward the lost colour as it drains
+		local partial = COLOR_STAR_LOST:Lerp(COLOR_STAR, fraction)
+		text ..= ("<font color=\"#%s\">★</font>"):format(partial:ToHex())
+		lostCount -= 1
+	end
+	text ..= ("<font color=\"#%s\">%s</font>"):format(COLOR_STAR_LOST:ToHex(), string.rep("★", math.max(0, lostCount)))
+	text ..= (" <font size=\"14\" color=\"#%s\">%.2f</font>"):format(COLOR_DIM:ToHex(), stars)
+	return text
 end
 
 function HUD.setState(newState: RunState)
