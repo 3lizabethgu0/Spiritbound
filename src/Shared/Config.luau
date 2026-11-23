@@ -81,4 +81,23 @@ Config.GUEST_ARRIVAL_WINDOW = 0.7           -- OPEN     guests arrive spread ove
 Config.CARRY_SLOTS_DEFAULT = 1             -- PROPOSED one item at a time
 Config.CARRY_SLOTS_RUNNER = 2              -- PROPOSED Runner class carries two
 
+-- Guests keep to the walkways. Pathfinding picks the cheapest route, and every
+-- material costs 1 by default, so a straight line across the garden beats the
+-- stone path. Charging extra for natural ground makes the stone path, decks and
+-- planks the cheap option. Keys are Enum.Material names; math.huge = never.
+-- Finite so a short stretch of grass between stepping stones is still allowed.
+Config.GUEST_OFF_PATH_COST = 5             -- PROPOSED
+Config.GUEST_OFF_PATH_MATERIALS = {
+	"Grass", "LeafyGrass", "Ground", "Mud", "Sand", "Rock", "Snow",
+	"Sandstone", "Basalt", "Limestone", "Salt", "Ice", "Glacier", "Water",
+}
+
+function Config.guestPathCosts(): { [string]: number }
+	local costs = {}
+	for _, material in Config.GUEST_OFF_PATH_MATERIALS do
+		costs[material] = Config.GUEST_OFF_PATH_COST
+	end
+	return costs
+end
+
 return Config

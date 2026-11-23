@@ -125,7 +125,13 @@ function Guest._walkTo(self: any, target: Vector3, timeout: number, abortIf: (()
 	-- AgentCanJump = false: with jumps allowed the navmesh routes guests up onto the
 	-- bridge railing from the riverbank, a hop a walking NPC cannot make, and they
 	-- stall there. Without jumps every spawn reaches the lobby along the bridge deck.
-	local path = PathfindingService:CreatePath({ AgentRadius = 2, AgentHeight = 5, AgentCanJump = false })
+	-- Costs: natural ground is expensive, so routes follow the stone paths (see Config).
+	local path = PathfindingService:CreatePath({
+		AgentRadius = 2,
+		AgentHeight = 5,
+		AgentCanJump = false,
+		Costs = Config.guestPathCosts(),
+	})
 	local ok = false
 	for attempt = 1, 2 do
 		ok = pcall(function()
