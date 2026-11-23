@@ -86,9 +86,11 @@ Config.CARRY_SLOTS_RUNNER = 2              -- PROPOSED Runner class carries two
 -- stone path. Charging extra for natural ground makes the stone path, decks and
 -- planks the cheap option. Keys are Enum.Material names; math.huge = never.
 -- Finite so a short stretch of grass between stepping stones is still allowed.
+-- "Ground" is deliberately NOT in the list: the dirt paths (Bamboo Grove) are
+-- painted with it, so it counts as a walkway.
 Config.GUEST_OFF_PATH_COST = 5             -- PROPOSED
 Config.GUEST_OFF_PATH_MATERIALS = {
-	"Grass", "LeafyGrass", "Ground", "Mud", "Sand", "Rock", "Snow",
+	"Grass", "LeafyGrass", "Mud", "Sand", "Rock", "Snow",
 	"Sandstone", "Basalt", "Limestone", "Salt", "Ice", "Glacier", "Water",
 }
 
