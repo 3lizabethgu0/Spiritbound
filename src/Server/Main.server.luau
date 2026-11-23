@@ -31,9 +31,6 @@ Placeholders.ensure()
 
 require(script.Parent.Economy) -- sets up leaderstats for every player
 
-local Doors = require(script.Parent.Doors)
-Doors.init()
-
 local GuestManager = require(script.Parent.GuestManager)
 GuestManager.init()
 

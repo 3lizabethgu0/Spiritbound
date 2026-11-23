@@ -1,7 +1,7 @@
 --!strict
 -- Collision groups. Guests pass through each other and through players, so a
--- teleport landing on someone or a head-on meeting on the bridge can never
--- fling anyone into the air. Everyone still collides with the map.
+-- head-on meeting in a doorway or on the bridge can never fling anyone into
+-- the air. Everyone still collides with the map.
 -- Players still collide with each other for now (OPEN: decide with CY).
 
 local PhysicsService = game:GetService("PhysicsService")
